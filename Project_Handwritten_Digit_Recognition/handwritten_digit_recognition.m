@@ -1,0 +1,437 @@
+% PROJECT - HANDWRITTEN DIGIT RECOGNITION USING MACHINE LEARNING IN MATLAB
+
+% This project will use classification techniques - logistic regression and
+% neural networks - for predicting the correct output, that is, the digit 
+% shown in the image.
+
+% Initialise
+clear ; close all; clc
+
+% Load training data set, cross validation data set and test data set
+% This data is an integer matrix of images for various digits
+
+% MNIST data set of digits(images) for training and testing below :-
+load('hdr_data.mat');
+
+% Training data set provided by Coursera - Machine Learning Programme by Dr. Andrew NG 
+% load('hdr_data_old.mat');
+
+fprintf('Data loaded into the system ...\n');
+fprintf('Information of data loaded into the system :-\n\n');
+whos
+      
+% 0-9 digits, therefore 10 classes
+num_classes = 10; 
+
+% Combining training data for all digits : train0, train1 .... train9
+% similarly create validation and test set also.
+
+% Original data matrix dimensions below
+% train0 -> 5923 x 784
+% train1 -> 6742 x 784
+% train2 -> 5958 x 784
+% train3 -> 6131 x 784
+% train4 -> 5842 x 784
+% train5 -> 5421 x 784
+% train6 -> 5918 x 784
+% train7 -> 6265 x 784
+% train8 -> 5851 x 784
+% train9 -> 5949 x 784
+
+% Every single example is a row for numbers that show color density at a
+% location in the image
+% 784 points, that is, 28x28 matrix of color density for an image.
+
+% Training data size for each class
+training_size = 1000;
+
+% Selecting random 1000 rows from each
+sel = randperm(size(train5, 1));  % randperm for size = 5421 (min. size among all trainX datas)
+sel_cv = sel(training_size+1 : training_size+200); % extracting some data for cross-validation
+sel = sel(1:training_size);
+
+% TRAIN DATA
+ 
+train_data = [train1(sel,:); train2(sel,:); train3(sel,:); ...
+              train4(sel,:); train5(sel,:); train6(sel,:); ...
+              train7(sel,:); train8(sel,:); train9(sel,:); train0(sel,:)];
+          
+% Input
+X = double(train_data);
+ 
+% Output (Note : digit '0' is shown as 10)
+Y = [ 1*ones(training_size,1) ; 2*ones(training_size,1); 3*ones(training_size,1); ...
+     4*ones(training_size,1); 5*ones(training_size,1); ...
+     6*ones(training_size,1); 7*ones(training_size,1); 8*ones(training_size,1); ...
+     9*ones(training_size,1); 10*ones(training_size,1) ];
+ 
+Y = double(Y);
+
+
+% CROSS_VALIDATION DATA : For Model Selection
+
+
+   
+% TEST DATA
+
+% Selecting random 729 rows from each test_digit
+test_size = 729;
+
+sel = randperm(size(test5, 1));
+sel = sel(1:test_size);
+Xtest = [test1(sel,:); test2(sel,:); test3(sel,:); ...
+             test4(sel,:); test5(sel,:); test6(sel,:); ...
+             test7(sel,:); test8(sel,:); test9(sel,:); test0(sel,:)];
+           
+Ytest = [ 1*ones(test_size,1) ; 2*ones(test_size,1); 3*ones(test_size,1); ...
+                4*ones(test_size,1); 5*ones(test_size,1); ...
+                6*ones(test_size,1); 7*ones(test_size,1); 8*ones(test_size,1); ...
+                9*ones(test_size,1); 10*ones(test_size,1) ];
+   
+sel = randperm(size(Xtest, 1));
+sel = sel(1:test_size*num_classes);
+
+Xtest = double(Xtest(sel,:));
+Ytest = double(Ytest(sel,:));
+
+   
+accuracy_lr_last_saved = -1;
+accuracy_nn_last_saved = -1;
+accuracy_svm_last_saved = -1;
+accuracy_lr_pca_last_saved = -1;   
+accuracy_nn_pca_last_saved = -1;
+accuracy_knn_last_saved = -1;
+
+
+ans = input('\nWant to see a subset of training data(images)?, enter(y/n) : ', 's');
+
+subset_size = 225;
+subset_test_size = 100;
+
+if ans == 'y' || ans == 'Y'
+   % Randomly select 225 rows(digits) to display
+   sel = randperm(size(X, 1));
+   sel = sel(1:subset_size);
+   
+   fprintf('Loading and visualising training and test data ...\n');
+   [h, display_array, matrixY] = function_display_data(X(sel,:), Y(sel), 'Training Data');
+   
+   [h, display_array, matrixY] = function_display_data(Xtest(1:subset_test_size,:), Ytest(1:subset_test_size)...
+                                                       , 'Test Data');
+   % matrixY % just for checking manually
+else
+    %do nothing
+end;
+   
+
+% Selection provided to choose which type of supervised learning for
+% classification problem, that is, digit(0-9) recognition
+
+logistic_regression = 1;
+logistic_regression_pca = 2;
+neural_networks = 3;
+neural_networks_pca = 4;
+support_vector_machine = 5;
+k_nearest_neighbors = 6;
+exitsystem = 7;
+
+enterloop = 'y';
+
+X_temp = X;
+Xtest_temp = Xtest;
+
+while enterloop == 'y' || enterloop == 'Y'
+
+    fprintf('\nChoose the classification technique for digit recognition :- \n\n');
+    fprintf('1. Logistic Regression\n');
+    fprintf('2. Logistic Regression after PCA\n');
+    fprintf('3. Neural Networks\n');
+    fprintf('4. Neural Networks after PCA\n');
+    fprintf('5. Support Vector Machine\n');
+    fprintf('6. K-Nearest Neighbors\n');
+    fprintf('7. Exit!!!\n');
+    
+    X = X_temp;
+    Xtest = Xtest_temp;
+
+    choice = input('Enter your choice : ');
+    
+    switch choice
+        
+        case logistic_regression
+            fprintf('\nLR!!!!\n');
+            
+            lambda = input('\nEnter the value of lambda(regularisation) : ');
+            
+            % one VS all 
+            % For eg. digit 1 vs all (0,2,3,..9) etc
+            
+            fprintf('\nTraining One-vs-All Logistic Regression...\n');
+
+            [all_theta] = function_one_vs_all(X,Y,num_classes,lambda);
+            
+            fprintf('\nAccuracy on test data : ');
+            [result, accuracy] = function_predict_one_vs_all(all_theta, Xtest, Ytest, test_size);
+            accuracy_lr_last_saved = accuracy;
+            
+            % dummy check
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+    
+            
+        case logistic_regression_pca
+            fprintf('\nLR PCA!!!!\n');
+            
+            [coeff score variance] = princomp(X);
+            pvar = cumsum(variance) / sum(variance);
+            k = max(find(pvar < 0.99));
+%             [coefftest scoretest variancetest] = princomp(Xtest);
+            
+            Xpca = X*coeff(:,1:k);
+            Xpcatest = Xtest*coeff(:,1:k);
+
+%             Dr. Andrew Ng's method shown in the course
+%             [X, mu, sigma] = function_feature_normalize(X);
+%             [Xtest, mutest, sigmatest] = function_feature_normalize(Xtest);
+%             
+%             k = 500; % We should minimum k (number of dimensions to be used for prediction)
+%             sigma = (1/size(X,1))*X'*X;
+%             [U,S,V] = svd(sigma);
+%             Ureduce = U(:,1:k); % n x k
+%             z = X * Ureduce;
+%             
+%             var = sum(sum(S(1:k,1:k))) / sum(sum(S));
+%             var*100
+%             fprintf('% of variance retained (it should be > 99%)\n');
+%             
+%             sigma2 = (1/size(Xtest,1))*Xtest'*Xtest;
+%             [U2,S2,V2] = svd(sigma2);
+%             Ureduce2 = U2(:,1:k);
+%             z2 = Xtest * Ureduce2;
+%             
+%             var2 = sum(sum(S2(1:k,1:k))) / sum(sum(S2));
+%             var2*100
+%             fprintf('% of variance retained on test set\n');
+%             
+%             Xpca = z;
+%             Xpcatest = z2;
+
+            lambda = input('\nEnter the value of lambda(regularisation) : ');
+            fprintf('\nTraining One-vs-All Logistic Regression with PCA...\n');
+            [all_theta] = function_one_vs_all(Xpca,Y,num_classes,lambda);             
+             
+            fprintf('\nAccuracy on test data : ');
+            [result, accuracy] = function_predict_one_vs_all(all_theta, Xpcatest, Ytest, test_size);
+            accuracy_lr_pca_last_saved = accuracy;
+            
+            % dummy check
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+             
+            
+        case neural_networks
+            fprintf('\nNN!!!!\n');
+            
+%           ans = input('Normalise data to speed up the process and improve neural network(y/n) ?? : ','s');
+            fprintf('Normalising data to speed up the process and improve neural network\n');
+%           if ans == 'y' || ans == 'Y'
+            [X, mu, sigma] = function_feature_normalize(X);
+            [Xtest, mutest, sigmatest] = function_feature_normalize(Xtest);
+%           end;
+        
+            lambda = input('\nEnter the value of lambda(regularisation) : ');
+            
+            fprintf('\nPerforming neural network technique\n');
+
+            input_layer_size = size(X,2); % 784
+            hidden_layer_size = 40;
+            output_layer_size = num_classes; % 10
+            
+            % theta1 for layer 1-2 nd theta2 for layer 2-3
+            [theta1, theta2] = function_rand_initialize_theta(input_layer_size, ...
+                                            hidden_layer_size, output_layer_size);
+    
+            % unroll parameters theta1 and theta2, that is, combine them to
+            % a single vector
+            theta_vec = [theta1(:) ; theta2(:)];
+    
+            cost_function_nn = @(t) function_cost_nn(t, input_layer_size, hidden_layer_size, ...
+                                                    output_layer_size, num_classes, X, Y, lambda);
+    
+            options = optimset('GradObj','on','MaxIter',100);
+            [optimal_theta_nn] = fmincg(cost_function_nn, theta_vec, options);
+        
+            fprintf('\nAccuracy on test data : ');
+            [result, accuracy] = function_predict_nn(Xtest, Ytest, lambda, optimal_theta_nn, num_classes, ...
+                            input_layer_size, hidden_layer_size, output_layer_size, test_size);
+            accuracy_nn_last_saved = accuracy;
+            
+            % dummy check
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+
+            
+        case neural_networks_pca
+            fprintf('\nNN PCA!!!!\n');
+            
+            [X, mu, sigma] = function_feature_normalize(X);
+            [Xtest, mutest, sigmatest] = function_feature_normalize(Xtest);
+             
+            k = 500; 
+            lambda = 0;
+%             We should minimum k (number of dimensions to be used for prediction)
+%             sigma = (1/size(X,1))*X'*X;
+%             [U,S,V] = svd(sigma);
+%             Ureduce = U(:,1:k);       % n x k
+%             z = X * Ureduce;          % m x k
+%             Xapprox = z * Ureduce';
+% 
+%             var = sum(sum(S(1:k,1:k))) / sum(sum(S));
+%             fprintf('%f percent of variance retained (it should be > 99%)\n',var*100);
+%             
+%             sigma2 = (1/size(Xtest,1))*Xtest'*Xtest;
+%             [U2,S2,V2] = svd(sigma2);
+%             Ureduce2 = U2(:,1:k);
+%             z2 = Xtest * Ureduce2;
+%             
+%             Xpca = z;
+%             Xpcatest = z2;
+%             [coeff,score,latent,tsquared,explained] = pca(X);
+
+            lambda = input('\nEnter the value of lambda(regularisation) : ');
+
+            [coeff score variance] = princomp(X);
+            pvar = cumsum(variance) / sum(variance);
+            k = max(find(pvar < 0.99));
+%             [coefftest scoretest variancetest] = princomp(Xtest);
+
+            Xpca = X*coeff(:,1:k);
+            Xpcatest = Xtest*coeff(:,1:k);
+            
+            fprintf('\nPerforming neural network technique with PCA\n');
+            
+            input_layer_size = size(Xpca,2); % 500
+            hidden_layer_size = 40;
+            output_layer_size = num_classes; % 10
+            
+            % theta1 for layer 1-2 nd theta2 for layer 2-3
+            [theta1, theta2] = function_rand_initialize_theta(input_layer_size, ...
+                                            hidden_layer_size, output_layer_size);
+    
+            % unroll parameters theta1 and theta2, that is, combine them to
+            % a single vector
+            theta_vec = [theta1(:) ; theta2(:)];
+    
+            cost_function_nn = @(t) function_cost_nn(t, input_layer_size, hidden_layer_size, ...
+                                                    output_layer_size, num_classes, Xpca, Y, lambda);
+    
+            options = optimset('GradObj','on','MaxIter',100);
+            [optimal_theta_nn] = fmincg(cost_function_nn, theta_vec, options);
+        
+            fprintf('\nAccuracy on test data : ');
+            [result, accuracy] = function_predict_nn(Xpcatest, Ytest, lambda, optimal_theta_nn, num_classes, ...
+                            input_layer_size, hidden_layer_size, output_layer_size, test_size);
+            accuracy_nn_pca_last_saved = accuracy;
+            
+            % dummy check
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+            
+        case support_vector_machine
+            fprintf('\nSVM!!!!');
+
+            model1 = fitcsvm(X,(Y == 1),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model2 = fitcsvm(X,(Y == 2),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model3 = fitcsvm(X,(Y == 3),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model4 = fitcsvm(X,(Y == 4),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model5 = fitcsvm(X,(Y == 5),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model6 = fitcsvm(X,(Y == 6),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model7 = fitcsvm(X,(Y == 7),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model8 = fitcsvm(X,(Y == 8),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model9 = fitcsvm(X,(Y == 9),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            model10 = fitcsvm(X,(Y == 10),'Standardize',true,'KernelFunction','RBF',...
+                'KernelScale','auto');
+            
+            [~, score1] = predict(model1,Xtest);
+            [~, score2] = predict(model2,Xtest);
+            [~, score3] = predict(model3,Xtest);
+            [~, score4] = predict(model4,Xtest);
+            [~, score5] = predict(model5,Xtest);
+            [~, score6] = predict(model6,Xtest);
+            [~, score7] = predict(model7,Xtest);
+            [~, score8] = predict(model8,Xtest);
+            [~, score9] = predict(model9,Xtest);
+            [~, score10] = predict(model10,Xtest);
+           
+            score = [score1(:,1), score2(:,1), score3(:,1), score4(:,1), ...
+                    score5(:,1), score6(:,1), score7(:,1), score8(:,1), ...
+                    score9(:,1), score10(:,1)];
+                
+            [min_element, min_index] = min(score');
+            fprintf('\nAccuracy on test data : ');
+            accuracy = sum(sum((min_index' == Ytest),1))/size(Ytest,1)
+            
+            accuracy_svm_last_saved = accuracy;
+            
+            %dummy check
+            result = min_index(1:subset_test_size);
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+           
+            fprintf('\nSVM completed finally\n');
+            
+        case k_nearest_neighbors
+            knn_model = fitcknn(X,Y,'NumNeighbors',8);
+            [~,score,~] = predict(knn_model,Xtest);
+            
+            [~, max_index] = max(score');
+            fprintf('\nAccuracy on test data : ');
+            accuracy = sum(sum((max_index' == Ytest),1))/size(Ytest,1)
+            
+            accuracy_knn_last_saved = accuracy;
+            
+            %dummy check
+            result = max_index(1:subset_test_size);
+            result_for_display = reshape(result(1:subset_test_size), 10, 10);
+            
+            result_for_display(result_for_display == 10) = 0;
+            result_for_display
+            
+        case exitsystem
+            fprintf('\nExit!!!!');
+            return;
+        otherwise
+            fprintf('\nInvalid choice!!!!');
+            
+    end;
+    
+    fprintf('\nComparing All ...\n');
+    fprintf('\nLR accuracy : %f', accuracy_lr_last_saved);
+    fprintf('\nNN accuracy : %f', accuracy_nn_last_saved);
+    fprintf('\nLR with PCA accuracy : %f', accuracy_lr_pca_last_saved);
+    fprintf('\nNN with PCA accuracy : %f', accuracy_nn_pca_last_saved);
+    fprintf('\nSVM accuracy : %f', accuracy_svm_last_saved);
+    fprintf('\nKNN accuracy : %f', accuracy_knn_last_saved);
+    
+    enterloop = input('\n\nWant to do it again?? (y/n) : ','s');
+    
+end;
